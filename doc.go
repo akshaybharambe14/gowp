@@ -26,4 +26,4 @@ Example:
 		// handle error
 	}
 */
-package gowp
+package gowp // import "github.com/akshaybharambe14/gowp"
