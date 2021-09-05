@@ -143,10 +143,10 @@ func (wp *workerPool) Wait() error {
 
 func (wp *workerPool) setError(err error) {
 	wp.oe.Do(func() {
-		wp.me.Lock()
-		defer wp.me.Unlock()
-
 		if isWorkError(err) {
+			wp.me.Lock()
+			defer wp.me.Unlock()
+
 			wp.err = err
 			wp.Close()
 		}
