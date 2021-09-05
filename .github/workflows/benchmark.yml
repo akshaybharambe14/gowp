@@ -1,0 +1,40 @@
+name: Generate benchmarks
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Generate benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.16
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - run: cd benchmarks
+      - run: pwd
+
+      - name: Modify dependencies
+        env:
+          GO111MODULE: on
+        run: go get -u && go mod tidy
+
+      - name: Run benchmarks
+        env:
+          GO111MODULE: on
+        run: go test -bench . -benchmem > benchmarks.txt
+
+      - name: Commit benchmarks
+        uses: EndBug/add-and-commit@v7
+        with:
+          default_author: user_info
+          message: "Benchmarks for $GITHUB_SHA"
+          pull_strategy: NO-PULL
