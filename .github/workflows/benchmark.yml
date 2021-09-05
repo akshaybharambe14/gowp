@@ -19,22 +19,17 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
-      - run: cd benchmarks
-      - run: pwd
+      - run: |
+          cd benchmarks
+          pwd
+          go get -u -d 
+          go mod tidy
+          go test -bench . -benchmem > benchmarks.txt
 
-      - name: Modify dependencies
-        env:
-          GO111MODULE: on
-        run: go get -u && go mod tidy
-
-      - name: Run benchmarks
-        env:
-          GO111MODULE: on
-        run: go test -bench . -benchmem > benchmarks.txt
-
+      - run: echo $GITHUB_SHA
       - name: Commit benchmarks
         uses: EndBug/add-and-commit@v7
         with:
           default_author: user_info
-          message: "Benchmarks for $GITHUB_SHA"
+          message: "add: benchmarks"
           pull_strategy: NO-PULL
