@@ -1,0 +1,8 @@
+goos: linux
+goarch: amd64
+pkg: github.com/akshaybharambe14/gowp/benchmarks
+cpu: Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
+BenchmarkOwn-2          	  273432	      4268 ns/op	     368 B/op	       4 allocs/op
+BenchmarkWorkerPool-2   	  109678	     11306 ns/op	     721 B/op	       9 allocs/op
+PASS
+ok  	github.com/akshaybharambe14/gowp/benchmarks	2.570s
