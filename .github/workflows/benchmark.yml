@@ -1,11 +1,9 @@
 name: Generate benchmarks
 
-on: [push, pull_request]
-
-# on:
-#   push:
-#     branches:
-#       - main
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -33,5 +31,5 @@ jobs:
         uses: EndBug/add-and-commit@v7
         with:
           default_author: user_info
-          message: "Benchmarks for $GITHUB_SHA"
+          message: "add: benchmarks"
           pull_strategy: NO-PULL
