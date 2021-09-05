@@ -7,15 +7,9 @@ import (
 )
 
 type (
-	// workerPool represents a pool of workers that limits concurency as per the provided worker count.
-	// This is not exported as we want users to use New() to create a worker pool and limit the scope of initialized pool in the same function where it is initialized.
-	//
-	// Following fields are not pointers as we want only one allocation in the form of &workerPool
-	// 	1. errOnce
-	// 	2. errMtx
-	// 	3. wg
-	// 	4. closeOnce
-	workerPool struct {
+	// WorkerPool represents a pool of workers that limits concurency as per the provided worker count.
+	// Zero value is not usable. Use New() to create a new WorkerPool.
+	WorkerPool struct {
 		errOnce sync.Once    // errOnce ensures that the error is assigned only once.
 		errMtx  sync.RWMutex // errMtx protects the access to err.
 		err     error        // err is the first error that occurred in the work.
@@ -23,15 +17,23 @@ type (
 		wg sync.WaitGroup
 
 		closeOnce sync.Once     // closeOnce ensures that close on in and closed is called only once.
-		in        chan work     // in works as a queue of work that workers listen on.
+		in        chan Work     // in works as a queue of work that workers listen on.
 		closed    chan struct{} // closed helps to determine if the pool is closed.
+
+		// errOnce, errMtx, wg, closeOnce fields are not pointers as we want only one allocation in the form of &WorkerPool
+
+		// Initially, it was thought that not to export this type
+		// as we want to force users to use New() to create a worker pool
+		// and limit the scope of initialized pool in the same function
+		// where it is initialized. This turns out to be a bad design.
+		// see https://github.com/golang/go/issues/2273
 	}
 
-	// work is a unit of work that is submitted to the pool by users.
-	work func() error
+	// Work is a unit of work that is submitted to the pool by users.
+	Work func() error
 )
 
-func New(ctx context.Context, buffer int, workers int, closeOnErr bool) (*workerPool, error) {
+func New(ctx context.Context, buffer int, workers int, closeOnErr bool) (*WorkerPool, error) {
 	if buffer <= 0 {
 		return nil, ErrInvalidBuffer
 	}
@@ -47,9 +49,9 @@ func New(ctx context.Context, buffer int, workers int, closeOnErr bool) (*worker
 	return newWorkerPool(ctx, buffer, workers, closeOnErr), nil
 }
 
-func newWorkerPool(ctx context.Context, buffer int, workers int, closeOnErr bool) *workerPool {
-	wp := &workerPool{
-		in:        make(chan work, buffer),
+func newWorkerPool(ctx context.Context, buffer int, workers int, closeOnErr bool) *WorkerPool {
+	wp := &WorkerPool{
+		in:        make(chan Work, buffer),
 		wg:        sync.WaitGroup{},
 		closeOnce: sync.Once{},
 		errOnce:   sync.Once{},
@@ -66,7 +68,7 @@ func newWorkerPool(ctx context.Context, buffer int, workers int, closeOnErr bool
 		}()
 	}
 
-	// this block ensures every goroutine exits before (*workerPool).Wait() returns and we don't accept further requests.
+	// this block ensures every goroutine exits before (*WorkerPool).Wait() returns and we don't accept further requests.
 	{
 		wp.wg.Add(1)
 		go func() {
@@ -91,12 +93,12 @@ func newWorkerPool(ctx context.Context, buffer int, workers int, closeOnErr bool
 // 	3. the pool has insufficient buffer
 //
 // If it returns true, the work is submitted to the pool and will get eventually executed.
-func (wp *workerPool) Submit(w work) bool {
+func (wp *WorkerPool) Submit(w Work) bool {
 	return w != nil && wp.submit(w) == nil
 }
 
 // submit tries to submit the work to the pool. It returns nil if the work is successfully submitted.
-func (wp *workerPool) submit(w work) (err error) {
+func (wp *WorkerPool) submit(w Work) (err error) {
 	if wp.isClosed() {
 		return ErrPoolClosed
 	}
@@ -122,15 +124,15 @@ func (wp *workerPool) submit(w work) (err error) {
 // Close closes the worker pool. It does not wait for the work to be finished.
 //
 // It is safe to call this function concurrently.
-func (wp *workerPool) Close() {
+func (wp *WorkerPool) Close() {
 	wp.closeOnce.Do(func() {
 		close(wp.in)
 		close(wp.closed)
 	})
 }
 
-// isClosed returns true if the pool is closed. This means (*workerpool).Close() was called before.
-func (wp *workerPool) isClosed() bool {
+// isClosed returns true if the pool is closed. This means (*Workerpool).Close() was called before.
+func (wp *WorkerPool) isClosed() bool {
 	select {
 	case <-wp.closed:
 		return true
@@ -142,7 +144,7 @@ func (wp *workerPool) isClosed() bool {
 
 // Wait waits for all the work to be finished.
 // It returns the first error if opted for close on error occurred, if any.
-func (wp *workerPool) Wait() error {
+func (wp *WorkerPool) Wait() error {
 	/*
 		wp.errMtx.RLock()
 		defer wp.errMtx.RUnlock()
@@ -164,7 +166,7 @@ func (wp *workerPool) Wait() error {
 	return wp.err
 }
 
-func (wp *workerPool) setError(err error) {
+func (wp *WorkerPool) setError(err error) {
 	wp.errOnce.Do(func() {
 		if isWorkError(err) {
 			wp.errMtx.Lock()
@@ -182,7 +184,7 @@ func (wp *workerPool) setError(err error) {
 // The worker returns when the context is canceled, exceeds deadline OR the pool is closed.
 //
 // The returned error helps in testing this function.
-func worker(ctx context.Context, in chan work, closeOnErr bool) error {
+func worker(ctx context.Context, in chan Work, closeOnErr bool) error {
 	for {
 		select {
 		case <-ctx.Done():
