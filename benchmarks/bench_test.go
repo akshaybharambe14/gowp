@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/akshaybharambe14/gowp"
+	"github.com/alitto/pond"
 	"github.com/gammazero/workerpool"
 )
 
@@ -41,6 +42,17 @@ func WorkerpoolSimple() {
 	wp.StopWait()
 }
 
+func PondSimple() {
+	const numTasks = 10
+	pool := pond.New(4, numTasks)
+
+	for i := 0; i < numTasks; i++ {
+		pool.Submit(noOpWorkerpool)
+	}
+
+	pool.StopAndWait()
+}
+
 func BenchmarkOwn(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		GoWPSimple()
@@ -50,5 +62,11 @@ func BenchmarkOwn(b *testing.B) {
 func BenchmarkWorkerPool(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		WorkerpoolSimple()
+	}
+}
+
+func BenchmarkPond(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		PondSimple()
 	}
 }
