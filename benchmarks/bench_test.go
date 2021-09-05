@@ -5,24 +5,29 @@ import (
 	"testing"
 
 	"github.com/akshaybharambe14/gowp"
+	"github.com/alitto/pond"
 	"github.com/gammazero/workerpool"
 )
 
 var (
-	noOpGoWP = func() error {
+	noOpErr = func() error {
 		return nil
 	}
 
-	noOpWorkerpool = func() {
+	noOp = func() {
 	}
 )
 
-func GoWPSimple() {
-	const numTasks = 10
-	wp, _ := gowp.New(context.TODO(), numTasks, 4, false)
+const (
+	numTasks10  = 10
+	numWorkers4 = 4
+)
 
-	for i := 0; i < numTasks; i++ {
-		wp.Submit(noOpGoWP)
+func simple_gowp() {
+	wp, _ := gowp.New(context.TODO(), numTasks10, numWorkers4, false)
+
+	for i := 0; i < numTasks10; i++ {
+		wp.Submit(noOpErr)
 	}
 
 	wp.Close()
@@ -30,25 +35,40 @@ func GoWPSimple() {
 	_ = wp.Wait()
 }
 
-func WorkerpoolSimple() {
-	const numTasks = 10
-	wp := workerpool.New(4)
+func simple_workerpool() {
+	wp := workerpool.New(numWorkers4)
 
-	for i := 0; i < numTasks; i++ {
-		wp.Submit(noOpWorkerpool)
+	for i := 0; i < numTasks10; i++ {
+		wp.Submit(noOp)
 	}
 
 	wp.StopWait()
 }
 
-func BenchmarkOwn(b *testing.B) {
+func simple_pond() {
+	pool := pond.New(numWorkers4, numTasks10)
+
+	for i := 0; i < numTasks10; i++ {
+		pool.Submit(noOp)
+	}
+
+	pool.StopAndWait()
+}
+
+func Benchmark_simple_gowp(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		GoWPSimple()
+		simple_gowp()
 	}
 }
 
-func BenchmarkWorkerPool(b *testing.B) {
+func Benchmark_simple_workerpool(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		WorkerpoolSimple()
+		simple_workerpool()
+	}
+}
+
+func Benchmark_simple_pond(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		simple_pond()
 	}
 }
