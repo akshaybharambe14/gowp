@@ -10,17 +10,18 @@ type (
 	// workerPool represents a pool of workers that limits concurency as per the provided worker count.
 	// This is not exported as we want users to use New() to create a worker pool and limit the scope of initialized pool in the same function where it is initialized.
 	workerPool struct {
-		oe  *sync.Once    // oe (once error) is used to ensure that the error is assigned only once.
-		me  *sync.RWMutex // me (mutex for error) is used to protect the access to err.
-		err error
+		errOnce *sync.Once    // errOnce ensures that the error is assigned only once.
+		errMtx  *sync.RWMutex // errMtx protects the access to err.
+		err     error         // err is the first error that occurred in the work.
 
 		wg *sync.WaitGroup
 
-		oc     *sync.Once // oc (once close) is used to ensure that close on in and closed is called only once.
-		in     chan work
-		closed chan struct{}
+		closeOnce *sync.Once    // closeOnce ensures that close on in and closed is called only once.
+		in        chan work     // in works as a queue of work that workers listen on.
+		closed    chan struct{} // closed helps to determine if the pool is closed.
 	}
 
+	// work is a unit of work that is submitted to the pool by users.
 	work func() error
 )
 
@@ -42,35 +43,38 @@ func New(ctx context.Context, buffer int, workers int, closeOnErr bool) (*worker
 
 func newWorkerPool(ctx context.Context, buffer int, workers int, closeOnErr bool) *workerPool {
 	wp := &workerPool{
-		in:     make(chan work, buffer),
-		wg:     &sync.WaitGroup{},
-		oc:     &sync.Once{},
-		oe:     &sync.Once{},
-		me:     &sync.RWMutex{},
-		closed: make(chan struct{}),
+		in:        make(chan work, buffer),
+		wg:        &sync.WaitGroup{},
+		closeOnce: &sync.Once{},
+		errOnce:   &sync.Once{},
+		errMtx:    &sync.RWMutex{},
+		closed:    make(chan struct{}),
 	}
 
 	for i := 0; i < workers; i++ {
 		wp.wg.Add(1)
+
 		go func() {
 			wp.setError(worker(ctx, wp.in, closeOnErr))
 			wp.wg.Done()
 		}()
 	}
 
-	wp.wg.Add(1)
-	// this is important as we want to ensure every goroutine exits before (*workerPool).Wait() returns.
-	go func() {
-		defer wp.wg.Done()
-		select {
-		case <-ctx.Done():
-			// user cancelled the context
-			// hence ensure that user does not submit any more work to the pool
-			wp.Close()
+	// this block ensures every goroutine exits before (*workerPool).Wait() returns and we don't accept further requests.
+	{
+		wp.wg.Add(1)
+		go func() {
+			defer wp.wg.Done()
+			select {
+			case <-ctx.Done():
+				// user cancelled the context
+				// hence ensure that user does not submit any more work to the pool
+				wp.Close()
 
-		case <-wp.closed: // the pool is closed
-		}
-	}()
+			case <-wp.closed: // the pool is closed
+			}
+		}()
+	}
 
 	return wp
 }
@@ -88,15 +92,13 @@ func (wp *workerPool) Submit(w work) bool {
 // submit tries to submit the work to the pool. It returns nil if the work is successfully submitted.
 func (wp *workerPool) submit(w work) (err error) {
 	if wp.isClosed() {
-		err = ErrPoolClosed
-		return
+		return ErrPoolClosed
 	}
 
 	defer func() {
 		// at this point, the pool was not closed till it passed the above check, and pool got closed just before send operation. This block ensures that this function does not panic because of send on closed channel.
 		if recover() != nil {
 			err = ErrInvalidSend
-			return
 		}
 	}()
 
@@ -104,6 +106,7 @@ func (wp *workerPool) submit(w work) (err error) {
 	case wp.in <- w:
 		// we have sufficient buffer to push work
 		return nil
+
 	default:
 		// insufficient buffer, return error
 		return ErrNoBuffer
@@ -114,7 +117,7 @@ func (wp *workerPool) submit(w work) (err error) {
 //
 // It is safe to call this function concurrently.
 func (wp *workerPool) Close() {
-	wp.oc.Do(func() {
+	wp.closeOnce.Do(func() {
 		close(wp.in)
 		close(wp.closed)
 	})
@@ -125,6 +128,7 @@ func (wp *workerPool) isClosed() bool {
 	select {
 	case <-wp.closed:
 		return true
+
 	default:
 		return false
 	}
@@ -133,19 +137,32 @@ func (wp *workerPool) isClosed() bool {
 // Wait waits for all the work to be finished.
 // It returns the first error if opted for close on error occurred, if any.
 func (wp *workerPool) Wait() error {
+	/*
+		wp.errMtx.RLock()
+		defer wp.errMtx.RUnlock()
+
+		wp.wg.Wait()
+
+		return wp.err
+
+		FUN FACT: above code will panic as mutex is acquired and we are waiting to finish the work.
+		If any worker won't be able to submit an error because of mutex.DEADLOCK!
+
+	*/
+
 	wp.wg.Wait()
 
-	wp.me.RLock()
-	defer wp.me.RUnlock()
+	wp.errMtx.RLock()
+	defer wp.errMtx.RUnlock()
 
 	return wp.err
 }
 
 func (wp *workerPool) setError(err error) {
-	wp.oe.Do(func() {
+	wp.errOnce.Do(func() {
 		if isWorkError(err) {
-			wp.me.Lock()
-			defer wp.me.Unlock()
+			wp.errMtx.Lock()
+			defer wp.errMtx.Unlock()
 
 			wp.err = err
 			wp.Close()
@@ -156,7 +173,7 @@ func (wp *workerPool) setError(err error) {
 // worker processes work sent on in channel. When it exists, it is guaranteed that last processed work is finished.
 // It must be run in a separate goroutine.
 //
-// The worker returns when the context is canceled OR the pool is closed.
+// The worker returns when the context is canceled, exceeds deadline OR the pool is closed.
 //
 // The returned error helps in testing this function.
 func worker(ctx context.Context, in chan work, closeOnErr bool) error {
@@ -165,6 +182,7 @@ func worker(ctx context.Context, in chan work, closeOnErr bool) error {
 		case <-ctx.Done():
 			// user cancelled the context
 			return ctx.Err()
+
 		case w, ok := <-in:
 			if !ok {
 				// the channel is closed by calling Close()
@@ -178,16 +196,7 @@ func worker(ctx context.Context, in chan work, closeOnErr bool) error {
 	}
 }
 
-// isWorkError returns true if the err is error returned by user defined work function Or if it is a context error.
+// isWorkError returns true if the err is a error returned by user defined work function and is not ErrPoolClosed
 func isWorkError(err error) bool {
-	// return err != nil &&
-	// 	err != ErrPoolClosed &&
-	// 	err != ErrNoBuffer &&
-	// 	err != ErrInvalidSend &&
-	// 	err != ErrInvalidBuffer &&
-	// 	err != ErrInvalidWorkerCnt &&
-	// 	err != context.Canceled &&
-	// 	err != context.DeadlineExceeded
-
 	return !errors.Is(err, ErrPoolClosed)
 }

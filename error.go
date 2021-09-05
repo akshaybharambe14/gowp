@@ -15,6 +15,7 @@ const (
 	ErrInvalidWorkerCnt = Error("worker count should be more than zero")
 )
 
+// interface guard to ensure Error implements error interface
 var _ error = Error("")
 
 func (e Error) Error() string {
