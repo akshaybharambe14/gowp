@@ -9,14 +9,20 @@ import (
 type (
 	// workerPool represents a pool of workers that limits concurency as per the provided worker count.
 	// This is not exported as we want users to use New() to create a worker pool and limit the scope of initialized pool in the same function where it is initialized.
+	//
+	// Following fields are not pointers as we want only one allocation in the form of &workerPool
+	// 	1. errOnce
+	// 	2. errMtx
+	// 	3. wg
+	// 	4. closeOnce
 	workerPool struct {
-		errOnce *sync.Once    // errOnce ensures that the error is assigned only once.
-		errMtx  *sync.RWMutex // errMtx protects the access to err.
-		err     error         // err is the first error that occurred in the work.
+		errOnce sync.Once    // errOnce ensures that the error is assigned only once.
+		errMtx  sync.RWMutex // errMtx protects the access to err.
+		err     error        // err is the first error that occurred in the work.
 
-		wg *sync.WaitGroup
+		wg sync.WaitGroup
 
-		closeOnce *sync.Once    // closeOnce ensures that close on in and closed is called only once.
+		closeOnce sync.Once     // closeOnce ensures that close on in and closed is called only once.
 		in        chan work     // in works as a queue of work that workers listen on.
 		closed    chan struct{} // closed helps to determine if the pool is closed.
 	}
@@ -44,10 +50,10 @@ func New(ctx context.Context, buffer int, workers int, closeOnErr bool) (*worker
 func newWorkerPool(ctx context.Context, buffer int, workers int, closeOnErr bool) *workerPool {
 	wp := &workerPool{
 		in:        make(chan work, buffer),
-		wg:        &sync.WaitGroup{},
-		closeOnce: &sync.Once{},
-		errOnce:   &sync.Once{},
-		errMtx:    &sync.RWMutex{},
+		wg:        sync.WaitGroup{},
+		closeOnce: sync.Once{},
+		errOnce:   sync.Once{},
+		errMtx:    sync.RWMutex{},
 		closed:    make(chan struct{}),
 	}
 
