@@ -22,10 +22,9 @@ jobs:
         uses: actions/checkout@v2
 
       - run: |
-          ls -l
           cd benchmarks
           pwd
-          go get -u
+          go get -u -d 
           go mod tidy
           go test -bench . -benchmem > benchmarks.txt
 
