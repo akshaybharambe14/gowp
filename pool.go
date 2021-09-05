@@ -152,7 +152,7 @@ func (wp *workerPool) Wait() error {
 		return wp.err
 
 		FUN FACT: above code will panic as mutex is acquired and we are waiting to finish the work.
-		If any worker won't be able to submit an error because of mutex.DEADLOCK!
+		Any worker won't be able to submit an error because of acquired mutex, DEADLOCK!
 
 	*/
 
