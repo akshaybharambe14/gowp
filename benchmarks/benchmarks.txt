@@ -1,9 +1,9 @@
 goos: linux
 goarch: amd64
 pkg: github.com/akshaybharambe14/gowp/benchmarks
-cpu: Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz
-Benchmark_simple_gowp-2         	  288789	      4278 ns/op	     368 B/op	       4 allocs/op
-Benchmark_simple_workerpool-2   	  110803	     10929 ns/op	     720 B/op	       9 allocs/op
-Benchmark_simple_pond-2         	  220364	      5203 ns/op	     759 B/op	      15 allocs/op
+cpu: Intel(R) Xeon(R) CPU E5-2673 v3 @ 2.40GHz
+Benchmark_simple_gowp-2         	  301335	      3734 ns/op	     592 B/op	       9 allocs/op
+Benchmark_simple_workerpool-2   	  124286	      9812 ns/op	     897 B/op	      18 allocs/op
+Benchmark_simple_pond-2         	  247070	      4617 ns/op	     968 B/op	      21 allocs/op
 PASS
-ok  	github.com/akshaybharambe14/gowp/benchmarks	3.807s
+ok  	github.com/akshaybharambe14/gowp/benchmarks	3.721s
