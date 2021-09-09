@@ -167,14 +167,16 @@ func (wp *WorkerPool) Wait() error {
 }
 
 func (wp *WorkerPool) setError(err error) {
-	wp.errOnce.Do(func() {
-		if isWorkError(err) {
-			wp.errMtx.Lock()
-			defer wp.errMtx.Unlock()
+	if !isWorkError(err) {
+		return
+	}
 
-			wp.err = err
-			wp.Close()
-		}
+	wp.errOnce.Do(func() {
+		wp.errMtx.Lock()
+		defer wp.errMtx.Unlock()
+
+		wp.err = err
+		wp.Close()
 	})
 }
 
