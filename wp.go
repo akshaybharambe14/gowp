@@ -18,13 +18,13 @@ type (
 	Pool struct {
 		wg sync.WaitGroup
 
-		err  error         // the first error that occurred in the execution.
-		errs chan error    // workers report errors through this channel.
-		quit chan struct{} // quit signal to close the pool. This will be closed on error or after successful execution.
-
-		in        chan Task // works as a queue of work that workers listen to.
-		closeOnce sync.Once // ensures that we perform exit formalities only once.
-		closed    uint32    // set to closed(1) when the pool is closed.
+		err          error         // the first error that occurred in the execution.
+		errs         chan error    // workers report errors through this channel.
+		quit         chan struct{} // quit signal to close the pool. This will be closed on error or after successful execution.
+		exitFromErrG chan struct{} // exit signal to close the error handling goroutine, in case if not closed already.
+		in           chan Task     // works as a queue of work that workers listen to.
+		closeOnce    sync.Once     // ensures that we perform exit formalities only once.
+		closed       uint32        // set to closed(1) when the pool is closed. Should be manipulated by sync/atomic.
 
 		// Initially, it was thought that not to export this type
 		// as we want to force users to use New() to create a new pool
@@ -75,12 +75,11 @@ func (p *Pool) Wait() error {
 		close(p.in)
 		atomic.StoreUint32(&p.closed, closed)
 
-		p.wg.Wait()
+		p.wg.Wait() // here, all workers are returned and no worker is writing to p.errs Only error handling go routine will write an error, if any.
 
-		if p.err == nil {
-			// this means we didn't encounter any errors and p.quit should be closed to signal error handling goroutine
-			close(p.quit)
-		}
+		close(p.exitFromErrG) // signal to the error handling go routine to exit (if not initiated by error occurrence OR context cancellation).
+
+		p.err = <-p.errs // wait for the error handling go routine to exit and write an error, if any.
 	})
 
 	if p.err != nil {
@@ -92,28 +91,32 @@ func (p *Pool) Wait() error {
 
 func newPool(ctx context.Context, numWorkers, numTasks int, exitOnErr bool) *Pool {
 	p := &Pool{
-		wg:        sync.WaitGroup{},
-		in:        make(chan Task, numTasks),
-		closeOnce: sync.Once{},
-		errs:      make(chan error, 1),
-		quit:      make(chan struct{}, 1),
+		wg:           sync.WaitGroup{},
+		in:           make(chan Task, numTasks),
+		closeOnce:    sync.Once{},
+		errs:         make(chan error, 1),
+		quit:         make(chan struct{}, 1),
+		exitFromErrG: make(chan struct{}, 1),
 	}
 
 	go func() {
+		var err error
 		select {
 		case <-ctx.Done():
-			p.err = ctx.Err()
+			err = ctx.Err()
 			close(p.quit)
 
-		case p.err = <-p.errs:
+		case err = <-p.errs:
 			if exitOnErr {
 				close(p.quit)
 			}
 
-		case <-p.quit:
-			// in case if we don't encounter any errors, p.quit will be closed from somewhere else.
-			// this helps to avoid goroutine leak.
+		case <-p.exitFromErrG:
+			// p.Wait() will be close p.exitFromErrG to signal the exit.
+			// this helps to avoid goroutine leak, in case if we don't encounter any errors.
 		}
+
+		p.errs <- err
 	}()
 
 	for i := 0; i < numWorkers; i++ {
