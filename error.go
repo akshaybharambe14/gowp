@@ -7,12 +7,14 @@ const (
 	ErrPoolClosed  = Error("pool is closed")
 	ErrNoBuffer    = Error("insufficient buffer")
 	ErrInvalidSend = Error("work sent on closed pool")
+	ErrNilTask     = Error("task is nil")
 )
 
 // validation errors
 const (
-	ErrInvalidBuffer    = Error("buffer value should be more than zero")
-	ErrInvalidWorkerCnt = Error("worker count should be more than zero")
+	ErrInvalidBuffer    = Error("buffer value should be greater than zero")
+	ErrInvalidWorkerCnt = Error("worker count should be greater than zero")
+	ErrNilContext       = Error("context is nil")
 )
 
 // interface guard to ensure Error implements error interface

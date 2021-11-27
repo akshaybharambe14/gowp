@@ -7,3 +7,5 @@ require (
 	github.com/alitto/pond v1.5.1
 	github.com/gammazero/workerpool v1.1.2
 )
+
+replace github.com/akshaybharambe14/gowp => ./..

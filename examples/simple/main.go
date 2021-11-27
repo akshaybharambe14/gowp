@@ -1,30 +1,35 @@
 package main
 
 import (
-	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/akshaybharambe14/gowp"
 )
 
 func main() {
-	run()
-}
+	const (
+		numJobs    = 50
+		numWorkers = 2
+		closeOnErr = true
+	)
 
-func run() {
-	const numTasks = 10
-	wp, _ := gowp.New(context.TODO(), numTasks, 4, false)
+	wp, _ := gowp.New(numJobs, gowp.WithExitOnError(true), gowp.WithNumWorkers(numWorkers))
 
-	for i := 0; i < numTasks; i++ {
+	for i := 0; i < numJobs; i++ {
 		i := i
-		wp.Submit(func() error {
-			fmt.Println("square of ", i, " is ", i*i)
+		_ = wp.Submit(func() error {
+			fmt.Println("processing", i)
+			time.Sleep(time.Millisecond)
+			if i == 12 {
+				return errors.New("can't continue")
+			}
 			return nil
 		})
 	}
 
-	wp.Close()
-
-	_ = wp.Wait()
-	fmt.Println("exit")
+	if err := wp.Wait(); err != nil {
+		fmt.Println("process jobs: ", err)
+	}
 }
