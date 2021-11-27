@@ -12,7 +12,7 @@ const (
 	testDefaultNumWorkers = 2
 )
 
-var testNoOpErrFunc = func() error { return nil }
+var testNoOpFunc = func() error { return nil }
 
 var testErr = errors.New("test error")
 
@@ -90,7 +90,7 @@ func TestPool_Submit(t *testing.T) {
 		{
 			name:    "submit task on closed pool",
 			p:       newPool(context.Background(), testDefaultNumWorkers, testDefaultNumTasks, true),
-			args:    args{t: testNoOpErrFunc},
+			args:    args{t: testNoOpFunc},
 			wantErr: true,
 			errVal:  ErrPoolClosed,
 			setup: func(p *Pool) {
@@ -100,7 +100,7 @@ func TestPool_Submit(t *testing.T) {
 		{
 			name:    "submit task while pool is closing",
 			p:       newPool(context.Background(), testDefaultNumWorkers, testDefaultNumTasks, true),
-			args:    args{t: testNoOpErrFunc},
+			args:    args{t: testNoOpFunc},
 			wantErr: true,
 			errVal:  ErrInvalidSend,
 			setup: func(p *Pool) {
@@ -110,7 +110,7 @@ func TestPool_Submit(t *testing.T) {
 		{
 			name:    "submit task after exhausting buffer",
 			p:       newPool(context.Background(), 1, 1, true),
-			args:    args{t: testNoOpErrFunc},
+			args:    args{t: testNoOpFunc},
 			wantErr: true,
 			errVal:  ErrNoBuffer,
 			setup: func(p *Pool) {
@@ -128,7 +128,7 @@ func TestPool_Submit(t *testing.T) {
 		{
 			name:    "submit task with no error",
 			p:       newPool(context.Background(), testDefaultNumWorkers, testDefaultNumTasks, true),
-			args:    args{t: testNoOpErrFunc},
+			args:    args{t: testNoOpFunc},
 			wantErr: false,
 			errVal:  nil,
 			setup:   nil,
@@ -153,6 +153,7 @@ func TestPool_Submit(t *testing.T) {
 }
 
 func TestPool_Wait(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
 	tests := []struct {
 		name    string
 		p       *Pool
@@ -166,9 +167,20 @@ func TestPool_Wait(t *testing.T) {
 			wantErr: true,
 			errVal:  testErr,
 			setup: func(p *Pool) {
-				err := p.Submit(func() error {
-					return testErr
-				})
+				err := p.Submit(testFuncWithErr)
+				if err != nil {
+					t.Errorf("Pool.Submit() error = %v", err)
+				}
+			},
+		},
+		{
+			name:    "context cancelled",
+			p:       newPool(ctx, testDefaultNumWorkers, testDefaultNumTasks, true),
+			wantErr: true,
+			errVal:  context.Canceled,
+			setup: func(p *Pool) {
+				cancel()
+				err := p.Submit(testNoOpFunc)
 				if err != nil {
 					t.Errorf("Pool.Submit() error = %v", err)
 				}
