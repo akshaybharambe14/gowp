@@ -38,11 +38,4 @@ func ExamplePool_exitOnError() {
 	if err := wp.Wait(); err != nil {
 		fmt.Println("process jobs: ", err)
 	}
-
-	// Unordered output: 50
-	// processing 0
-	// processing 2
-	// processing 1
-	// ...
-	// process jobs: can't continue
 }
