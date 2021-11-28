@@ -1,7 +1,6 @@
 package benchmarks
 
 import (
-	"context"
 	"testing"
 
 	"github.com/akshaybharambe14/gowp"
@@ -24,13 +23,13 @@ const (
 )
 
 func simple_gowp() {
-	wp, _ := gowp.New(context.TODO(), numTasks10, numWorkers4, false)
+	wp, _ := gowp.New(numTasks10, gowp.WithNumWorkers(numWorkers4))
 
 	for i := 0; i < numTasks10; i++ {
 		wp.Submit(noOpErr)
 	}
 
-	wp.Close()
+	// wp.Close()
 
 	_ = wp.Wait()
 }

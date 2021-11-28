@@ -1,4 +1,4 @@
-package main
+package gowp_test
 
 import (
 	"errors"
@@ -8,21 +8,27 @@ import (
 	"github.com/akshaybharambe14/gowp"
 )
 
-func main() {
+// ExitOnError demonstrates the use of a Worker Pool to implement a use-case
+// where a task can fail and the pool should exit and return the error.
+func ExamplePool_exitOnError() {
 	const (
 		numJobs    = 50
 		numWorkers = 2
 		closeOnErr = true
 	)
 
-	wp, _ := gowp.New(numJobs, gowp.WithExitOnError(true), gowp.WithNumWorkers(numWorkers))
+	wp, _ := gowp.New(
+		numJobs,
+		gowp.WithExitOnError(true),
+		gowp.WithNumWorkers(numWorkers),
+	)
 
 	for i := 0; i < numJobs; i++ {
 		i := i
 		_ = wp.Submit(func() error {
-			fmt.Println("processing", i)
+			fmt.Println("processing ", i)
 			time.Sleep(time.Millisecond)
-			if i == 12 {
+			if i == 2 {
 				return errors.New("can't continue")
 			}
 			return nil
